@@ -57,7 +57,7 @@ Example output:
 
 Clone/download the repo and run index.html. It runs as a local file without needing a web server.
 
-_Can you currently use it to create an index?_ The output can be copied cleanly into Excel, but in future, this should render/be printable from HTML.
+**Can you currently use it to create an index?** The output can be copied cleanly into Excel, but in future, this should render/be printable from HTML.
 
 This is very rough. In the extremely likely event of errors, check the browser console log to see what it happening. Feel free to create an issue, but please understand that there should be no expectation of support. An issue that contains your input, output (if any), and entries from the console is much more likely to be checked and responded to.
 
