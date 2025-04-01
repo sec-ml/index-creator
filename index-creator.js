@@ -1,3 +1,6 @@
+// Set constants
+const INCLUDE_TESTS = true;
+
 //  Takes pasted index content as one long string, parses into an array of row objects.
 //  For Markdown: Recognizes headers from the first line, skips the divider.
 //  Each row is mapped to a dictionary.
