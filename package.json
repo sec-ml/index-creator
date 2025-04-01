@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "build": "esbuild index-creator.js --define:INCLUDE_TESTS=false --minify --outfile=index-creator.min.js",
+    "test": "node index-creator.js -t"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.2"
+  }
+}
