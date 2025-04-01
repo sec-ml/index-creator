@@ -356,6 +356,7 @@ function runTests() {
 }
 
 if (
+  INCLUDE_TESTS &&
   typeof process !== "undefined" &&
   process.argv &&
   process.argv.includes("-t")
