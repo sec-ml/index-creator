@@ -3,7 +3,11 @@
 //  Each row is mapped to a dictionary.
 
 function parseMarkdownTable(markdown) {
-  const lines = markdown.trim().split("\n");
+  const lines = markdown
+    .trim()
+    .split("\n")
+    .map((line) => line.trim());
+
   if (lines.length < 2) return [];
 
   const headers = lines[0]
@@ -282,12 +286,78 @@ function renderToHTML(data) {
 }
 
 // perform all the actions when `Create Index` button is pressed.
-document.getElementById("create_index_button").addEventListener("click", () => {
-  const markdown = document.getElementById("index_input").value;
-  const rows = parseMarkdownTable(markdown);
+function runInBrowser() {
+  document
+    .getElementById("create_index_button")
+    .addEventListener("click", () => {
+      const markdown = document.getElementById("index_input").value;
+      const rows = parseMarkdownTable(markdown);
+      const replacements = extractReplacements(rows);
+      stripDefinitions(rows);
+      applyReplacements(rows, replacements);
+      const processed = processData(rows);
+      renderToHTML(processed);
+    });
+}
+
+function runTests() {
+  const test_markdown_input = `
+    | term              | sub-term | notes                                  | book | page |
+    |-------------------|----------|----------------------------------------|------|------|
+    | vuln^vulnerability|          | Vuln is bad.                           | 1    | 10   |
+    | vuln              |          | vuln is common.                        |      |      |
+    | ttp^"tactics, techniques & procedures" |   | !ttp should not be replaced           | 1    | 11   |
+    `;
+
+  const expected_output = [
+    {
+      term: "tactics, techniques & procedures",
+      subTerm: "",
+      notes: "ttp should not be replaced",
+      book: 1,
+      page: 11,
+    },
+    {
+      term: "vulnerability",
+      subTerm: "",
+      notes: "vulnerability is bad.",
+      book: 1,
+      page: 10,
+    },
+    {
+      term: "vulnerability",
+      subTerm: "",
+      notes: "vulnerability is common.",
+      book: 1,
+      page: 10,
+    },
+  ];
+
+  const rows = parseMarkdownTable(test_markdown_input);
   const replacements = extractReplacements(rows);
   stripDefinitions(rows);
   applyReplacements(rows, replacements);
   const processed = processData(rows);
-  renderToHTML(processed);
-});
+
+  const passed = JSON.stringify(processed) === JSON.stringify(expected_output);
+
+  if (passed) {
+    console.log("✅ Test passed.");
+    process.exit(0);
+  } else {
+    console.error("❌ Test failed.");
+    console.error("Expected:", JSON.stringify(expected_output, null, 2));
+    console.error("Received:", JSON.stringify(processed, null, 2));
+    process.exit(1);
+  }
+}
+
+if (
+  typeof process !== "undefined" &&
+  process.argv &&
+  process.argv.includes("-t")
+) {
+  runTests();
+} else if (typeof document !== "undefined") {
+  runInBrowser();
+}
