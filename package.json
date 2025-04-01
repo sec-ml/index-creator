@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "build": "esbuild index-creator.js --define:INCLUDE_TESTS=false --minify --outfile=index-creator.min.js",
+    "build": "esbuild index-creator.js --bundle --drop:console --legal-comments=inline --define:INCLUDE_TESTS=false --minify --outfile=index-creator.min.js",
     "test": "node index-creator.js -t"
   },
   "devDependencies": {
