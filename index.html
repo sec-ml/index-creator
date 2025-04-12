@@ -22,6 +22,9 @@
         padding: 4px;
         vertical-align: top;
       }
+      .page-segment {
+        white-space: nowrap;
+      }
     </style>
   </head>
   <body>
@@ -30,8 +33,22 @@
     <button id="create_index_button">Create Index!</button>
 
     <h2>Index:</h2>
+    <button id="export_csv_button" style="display: none; margin-bottom: 1em">
+      Export to CSV
+    </button>
+    <button id="export_excel_button" style="display: none; margin-left: 1em">
+      Export to Excel
+    </button>
+    <button
+      id="toggle_collapse_button"
+      style="display: none; margin-right: 1em"
+    >
+      Expand duplicate fields
+    </button>
+
     <div id="output"></div>
 
     <script src="index-creator.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
   </body>
 </html>
