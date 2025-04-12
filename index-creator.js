@@ -1,7 +1,7 @@
-//  Takes pasted index content as one long string, parses into an array of row objects.
-//  For Markdown: Recognizes headers from the first line, skips the divider.
-//  Each row is mapped to a dictionary.
-
+// Takes pasted index content as one long string, parses into an array of row objects.
+// For Markdown: Recognises headers from the first line, skips the divider.
+// Each row is mapped to a dictionary.
+// Flags comment rows (starting with '?') with _ignore: true.
 function parseMarkdownTable(markdown) {
   const lines = markdown
     .trim()
@@ -29,6 +29,7 @@ function parseMarkdownTable(markdown) {
   });
 
   // Flag rows starting with ? as comment rows (not included in output)
+  // Replacements can be defined in comment rows.
   rows.forEach((row) => {
     const term = row.term?.trim() || "";
     if (term.startsWith("?")) {
@@ -73,7 +74,7 @@ function extractReplacements(rows) {
         else if (match[7]) replacement = match[7].trim(); // unquoted single word replacement
 
         if (shorthand && replacement) {
-          console.log(`Defining: "${shorthand}" → "${replacement}"`);
+          console.log(`Defining: "${shorthand}" -> "${replacement}"`);
           replacementMap[shorthand] = replacement;
         }
       }
@@ -115,7 +116,7 @@ function applyReplacements(rows, replacements) {
       let text = row[field] || "";
       const placeholders = {};
 
-      // step 1 - identify & replace !escaped terms with placeholders
+      // Step 1 - temporarily replace !escaped terms
       for (const shorthand of Object.keys(replacements)) {
         const escapedRegex = new RegExp(
           `\\!\\b${escapeRegExp(shorthand)}\\b`,
@@ -128,31 +129,141 @@ function applyReplacements(rows, replacements) {
         });
       }
 
-      // step 2 - apply replacements to unescaped terms
+      // Step 2 - apply replacements with case-sensitive styling
       for (const [shorthand, replacement] of Object.entries(replacements)) {
         const regex = new RegExp(`\\b${escapeRegExp(shorthand)}\\b`, "gi");
-        text = text.replace(regex, replacement);
+
+        text = text.replace(regex, (matched) =>
+          matchCapitalisation(matched, replacement)
+        );
       }
 
-      // step 3 - restore escaped terms
+      // Step 3 - restore escaped terms
       for (const [placeholder, original] of Object.entries(placeholders)) {
         const restoreRegex = new RegExp(escapeRegExp(placeholder), "g");
         text = text.replace(restoreRegex, original);
       }
 
-      // set the field in the row back to whatever string we've built (or not,
-      // if there were no matches)
       row[field] = text;
     });
   }
 }
 
+function expandFlippedRows(rows) {
+  const expanded = [];
+
+  for (const row of rows) {
+    const term = (row.term || "").trim();
+    const subTerm = (row["sub-term"] || "").trim();
+
+    const hasFlip = term.includes("<>") || subTerm.includes("<>");
+
+    if (!hasFlip) {
+      expanded.push(row);
+      continue;
+    }
+
+    // Remove `<>` markers from both fields
+    const cleanTerm = term.replace(/<>/g, "").trim();
+    const cleanSubTerm = subTerm.replace(/<>/g, "").trim();
+
+    // Push original row with cleaned fields
+    expanded.push({
+      ...row,
+      term: cleanTerm,
+      "sub-term": cleanSubTerm,
+      _ignore: row._ignore || false,
+    });
+
+    // Push flipped row (term and sub-term switched)
+    expanded.push({
+      ...row,
+      term: cleanSubTerm,
+      "sub-term": cleanTerm,
+      _ignore: row._ignore || false,
+    });
+  }
+
+  return expanded;
+}
+
+// Handles `&&` syntax in any field, generating multiple rows
+// for each combination of values (e.g., `a && b` becomes `a` and `b`).
+// Also combines with other field expansions (e.g.`<>`).
+function expandSplitRows(rows) {
+  const expanded = [];
+
+  for (const row of rows) {
+    const fields = ["term", "sub-term", "notes", "book", "page"];
+
+    // Identify which fields have &&
+    const splitFields = fields.map((field) => {
+      const raw = row[field] || "";
+      return raw.includes("&&")
+        ? raw.split("&&").map((part) => part.trim())
+        : [raw.trim()];
+    });
+
+    // collect all potential splits before processing
+    const [terms, subTerms, notes, books, pages] = splitFields;
+
+    // loop through all combinations of the split fields
+    for (const term of terms) {
+      for (const subTerm of subTerms) {
+        for (const note of notes) {
+          for (const book of books) {
+            for (const page of pages) {
+              expanded.push({
+                term,
+                "sub-term": subTerm,
+                notes: note,
+                book,
+                page,
+                _ignore: row._ignore || false,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return expanded;
+}
+
+// ^^ indicates a field above should be copied down. e.g. maybe you
+// want the same notes field for a different term.
+function applyFieldInheritance(rows) {
+  let lastRow = {};
+
+  rows.forEach((row, rowIndex) => {
+    if (row._ignore) return;
+
+    for (const field of ["term", "sub-term", "notes", "book", "page"]) {
+      if ((row[field] || "").trim() === "^^") {
+        row[field] = lastRow[field] || "";
+        console.log(
+          `Row ${rowIndex}: copying "${field}" from previous row -> "${row[field]}"`
+        );
+      }
+    }
+
+    // only update lastRow with actual data rows (not comments)
+    lastRow = { ...row };
+  });
+}
+
 // An attempt at a rules engine... Each rule is kept separate to
 // enable future tweaking/addition of rules. Or re-ordering, as
 // the order trickles down.
+// - Applies row-level inheritance rules (like copying from previous row)
+// - Normalises and sorts by term, sub-term, and first page number
+// - Converts the page string into a consistent format
+// - Handles special rules like `term*` and blank sub-terms. -- obsolete. `&&` supersedes
+// The output is sorted for HTML or export rendering.
 function processData(rows) {
   const processed = [];
-  let last = { term: "", subTerm: "", notes: "", book: 0, page: 0 };
+  let last = { term: "", subTerm: "", notes: "", book: 0, page: "" };
 
   for (const row of rows) {
     if (row._ignore) continue;
@@ -173,7 +284,7 @@ function processData(rows) {
     let subTerm = rawSubTerm;
     let notes = rawNotes;
     let book = hasBook ? parseInt(rawBook) : 0;
-    let page = hasPage ? parseInt(rawPage) : 0;
+    let page = hasPage ? normalisePageOrder(rawPage) : last.page;
 
     // Rule 1 - Row only has `term`, all other fields blank:
     // Copy `book` and `page` from previous row
@@ -182,8 +293,8 @@ function processData(rows) {
       !hasSubTerm &&
       !hasNotes &&
       !hasBook &&
-      !hasPage &&
-      !rawTerm.endsWith("*")
+      !hasPage
+      // !rawTerm.endsWith("*") - obsolete with &&
     ) {
       term = rawTerm;
       subTerm = "";
@@ -194,20 +305,22 @@ function processData(rows) {
 
     // Rule 2 - `term*` or `term *` (ends with asterisk), all others blank:
     // Copy sub-term, notes, book, page from previous row
-    else if (
-      hasTerm &&
-      !hasSubTerm &&
-      !hasNotes &&
-      !hasBook &&
-      !hasPage &&
-      rawTerm.endsWith("*")
-    ) {
-      term = rawTerm.replace(/\*$/, "");
-      subTerm = last.subTerm;
-      notes = last.notes;
-      book = last.book;
-      page = last.page;
-    }
+    // REMOVE THIS - now obsolete with &&
+
+    // else if (
+    //   hasTerm &&
+    //   !hasSubTerm &&
+    //   !hasNotes &&
+    //   !hasBook &&
+    //   !hasPage &&
+    //   rawTerm.endsWith("*")
+    // ) {
+    //   term = rawTerm.replace(/\*$/, "");
+    //   subTerm = last.subTerm;
+    //   notes = last.notes;
+    //   book = last.book;
+    //   page = last.page;
+    // }
 
     // Rule 3 - Row only contains sub-term:
     // Copy term, book, and page from previous row
@@ -225,7 +338,7 @@ function processData(rows) {
       subTerm = rawSubTerm;
       notes = rawNotes;
       book = hasBook ? parseInt(rawBook) : last.book;
-      page = hasPage ? parseInt(rawPage) : last.page;
+      page = hasPage ? normalisePageOrder(rawPage) : last.page;
     }
 
     // add each row to the `processed` (dictionary) object
@@ -239,39 +352,123 @@ function processData(rows) {
   // Sort the `processed` object before rendering.
   // Alphabetically: first by term, then sub-term, then book number
   processed.sort((a, b) => {
-    const termCmp = a.term.localeCompare(b.term);
+    const termCmp = cleanStripMarkdown(a.term).localeCompare(
+      cleanStripMarkdown(b.term)
+    );
     if (termCmp !== 0) return termCmp;
 
-    const subCmp = a.subTerm.localeCompare(b.subTerm);
+    const subCmp = cleanStripMarkdown(a.subTerm).localeCompare(
+      cleanStripMarkdown(b.subTerm)
+    );
     if (subCmp !== 0) return subCmp;
 
-    return a.book - b.book;
+    const pageA = extractPageStart(a.page);
+    const pageB = extractPageStart(b.page);
+    return pageA - pageB;
   });
 
   return processed;
 }
 
 // Create and render an HTML table from the `processed` dict object
-function renderToHTML(data) {
+// If `isCollapsed` is true, duplicate terms/sub-terms are collapsed
+// using `rowspan`. Otherwise, all rows are shown.
+// Markdown within fields is rendered as HTML using `parseInlineMarkdown`.
+// Page numbers are wrapped in span tags for styling (allows CSS to prevent page
+// number ranges being split across lines).
+function renderToHTML(data, isCollapsed) {
+  document.getElementById("export_csv_button").onclick = () =>
+    exportToCSV(data);
+  document.getElementById("export_excel_button").onclick = () =>
+    exportToExcel(data);
+
   const table = document.createElement("table");
+  const rows = [];
+
+  if (isCollapsed) {
+    // default view == collapsed mode — uses rowspan to reduce visual duplication
+    // Exports to CSV/Excel with current view
+    let i = 0;
+    while (i < data.length) {
+      const current = data[i];
+      const termGroup = data
+        .slice(i)
+        .filter((row) => row.term === current.term);
+      const termRowspan = termGroup.length;
+
+      for (let j = 0; j < termRowspan; ) {
+        const row = data[i + j];
+        const subGroup = termGroup
+          .slice(j)
+          .filter((r) => r.subTerm === row.subTerm);
+        const subRowspan = subGroup.length;
+
+        const termCell =
+          j === 0
+            ? `<td rowspan="${termRowspan}">${parseInlineMarkdown(
+                row.term
+              )}</td>`
+            : "";
+
+        const subTermCell =
+          subRowspan > 1
+            ? `<td rowspan="${subRowspan}">${parseInlineMarkdown(
+                row.subTerm
+              )}</td>`
+            : `<td>${parseInlineMarkdown(row.subTerm)}</td>`;
+
+        rows.push(`
+          <tr>
+            ${termCell}
+            ${subTermCell}
+            <td>${parseInlineMarkdown(row.notes)}</td>
+            <td>${row.book}</td>
+            <td>${wrapPageSpans(parseInlineMarkdown(row.page))}</td>
+
+
+          </tr>
+        `);
+
+        for (let k = 1; k < subRowspan; k++) {
+          const nextRow = data[i + j + k];
+          rows.push(`
+            <tr>
+              <td>${parseInlineMarkdown(nextRow.notes)}</td>
+              <td>${nextRow.book}</td>
+              <td>${nextRow.page}</td>
+            </tr>
+          `);
+        }
+
+        j += subRowspan;
+      }
+
+      i += termRowspan;
+    }
+  } else {
+    // expanded view — no rowspan, show all values. Exports to CSV/Excel with current view
+    data.forEach((row) => {
+      rows.push(`
+        <tr>
+          <td>${parseInlineMarkdown(row.term)}</td>
+          <td>${parseInlineMarkdown(row.subTerm)}</td>
+          <td>${parseInlineMarkdown(row.notes)}</td>
+          <td>${row.book}</td>
+          <td>${wrapPageSpans(parseInlineMarkdown(row.page))}</td>
+
+
+        </tr>
+      `);
+    });
+  }
+
+  // build and insert HTML table
   table.innerHTML = `
     <thead>
       <tr><th>Term</th><th>Sub-term</th><th>Notes</th><th>Book</th><th>Page</th></tr>
     </thead>
     <tbody>
-      ${data
-        .map(
-          (row) => `
-        <tr>
-          <td>${row.term}</td>
-          <td>${row.subTerm}</td>
-          <td>${row.notes}</td>
-          <td>${row.book}</td>
-          <td>${row.page}</td>
-        </tr>
-      `
-        )
-        .join("")}
+      ${rows.join("")}
     </tbody>
   `;
 
@@ -279,7 +476,6 @@ function renderToHTML(data) {
   document.getElementById("output").appendChild(table);
 }
 
-// perform all the actions when `Create Index` button is pressed.
 // util functions
 
 // Adjusts capitalisation of replacement string to match shorthand input
@@ -461,46 +657,87 @@ function runInBrowser() {
     });
 }
 
-function runTests() {
-  const test_markdown_input = `
-    | term              | sub-term | notes                                  | book | page |
-    |-------------------|----------|----------------------------------------|------|------|
-    | vuln^vulnerability|          | Vuln is bad.                           | 1    | 10   |
-    | vuln              |          | vuln is common.                        |      |      |
-    | ttp^"tactics, techniques & procedures" |   | !ttp should not be replaced           | 1    | 11   |
-    `;
+// called by other export functions (below)
+function getExportData(data, isCollapsed) {
+  if (!isCollapsed) return data; // return full data for expanded mode
 
-  const expected_output = [
-    {
-      term: "tactics, techniques & procedures",
-      subTerm: "",
-      notes: "ttp should not be replaced",
-      book: 1,
-      page: 11,
-    },
-    {
-      term: "vulnerability",
-      subTerm: "",
-      notes: "vulnerability is bad.",
-      book: 1,
-      page: 10,
-    },
-    {
-      term: "vulnerability",
-      subTerm: "",
-      notes: "vulnerability is common.",
-      book: 1,
-      page: 10,
-    },
+  const exportData = [];
+  let lastTerm = null;
+  let lastSubTerm = null;
+
+  for (const row of data) {
+    const term = row.term === lastTerm ? "" : row.term;
+    const subTerm =
+      row.term === lastTerm && row.subTerm === lastSubTerm ? "" : row.subTerm;
+
+    exportData.push({
+      term,
+      subTerm,
+      notes: row.notes,
+      book: row.book,
+      page: row.page,
+    });
+
+    lastTerm = row.term;
+    lastSubTerm = row.subTerm;
+  }
+
+  return exportData;
+}
+
+// export to csv... not sure how useful this actually is
+function exportToCSV(data) {
+  const exportData = getExportData(data, isCollapsed);
+
+  const rows = [
+    ["Term", "Sub-term", "Notes", "Book", "Page"],
+    ...exportData.map((row) => [
+      stripMarkdown(row.term),
+      stripMarkdown(row.subTerm),
+      stripMarkdown(row.notes),
+      row.book,
+      row.page,
+    ]),
   ];
 
-  const rows = parseMarkdownTable(test_markdown_input);
-  const replacements = extractReplacements(rows);
-  stripDefinitions(rows);
-  applyReplacements(rows, replacements);
-  const processed = processData(rows);
+  const csvContent = rows
+    .map((r) =>
+      r.map((field) => `"${String(field).replace(/"/g, '""')}"`).join(",")
+    )
+    .join("\n");
 
-  const passed = JSON.stringify(processed) === JSON.stringify(expected_output);
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "index.csv";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// export to Excel using xlsx library
+function exportToExcel(data) {
+  const exportData = getExportData(data, isCollapsed);
+
+  const rows = [
+    ["Term", "Sub-term", "Notes", "Book", "Page"],
+    ...exportData.map((row) => [
+      stripMarkdown(row.term),
+      stripMarkdown(row.subTerm),
+      stripMarkdown(row.notes),
+      row.book,
+      row.page,
+    ]),
+  ];
+
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Index");
+
+  XLSX.writeFile(workbook, "index.xlsx");
+}
 
 // Function to run test cases (defined in files in tests directory),
 // using -t - compares testcase to the content in .expected.json file
