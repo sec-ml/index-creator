@@ -104,12 +104,6 @@ function stripDefinitions(rows) {
   }
 }
 
-// function to escape any special characters that broke... I mean, *might break*
-// regex functions.
-function escapeRegExp(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 // iterates through all rows, and the applicable text-fields in each row
 // and uses regex to replace shorthand terms with the defined replacements.
 // Special processing where there are terms we have defined to be replaced
@@ -286,6 +280,11 @@ function renderToHTML(data) {
 }
 
 // perform all the actions when `Create Index` button is pressed.
+// function to escape any special characters that broke... I mean, *might break*
+// regex functions.
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 function runInBrowser() {
   document
     .getElementById("create_index_button")
