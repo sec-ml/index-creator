@@ -280,11 +280,142 @@ function renderToHTML(data) {
 }
 
 // perform all the actions when `Create Index` button is pressed.
+// util functions
+
+// Adjusts capitalisation of replacement string to match shorthand input
+// Preserves internal acronyms (2+ defined uppercase characters)
+// regardless of input capitalisation
+function matchCapitalisation(source, replacement) {
+  const isAllCaps = source === source.toUpperCase();
+  const isCapitalised = source[0] === source[0].toUpperCase();
+
+  const tokens = replacement.split(/\b/);
+
+  let capitalisedFirst = false;
+
+  return tokens
+    .map((token) => {
+      if (/[A-Z]{2,}/.test(token)) return token; // preserve acronyms
+
+      if (isAllCaps) {
+        return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+      } else if (isCapitalised && !capitalisedFirst && /[a-zA-Z]/.test(token)) {
+        capitalisedFirst = true;
+        return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+      } else {
+        return token.toLowerCase();
+      }
+    })
+    .join("");
+}
+
+// For HTML display only: wraps each comma-separated page entry
+// in a <span> tag to allow styling (e.g. bolded spans, prevent
+// hyphenated ranges from being split across lines).
+// Used only in `renderToHTML` output.
+function wrapPageSpans(text) {
+  return text
+    .split(",")
+    .map((chunk) => `<span class="page-segment">${chunk.trim()}</span>`)
+    .join(", ");
+}
+
+// Parse and re-order comma-separated page num strings so that
+// the lowest page numbers appear first, even if mixed with
+// markdown (i.e. `**10**` will still be ordered as 10).
+// Ranges are sorted based on their starting number.
+function normalisePageOrder(pageString) {
+  if (!pageString) return "";
+
+  return pageString
+    .split(",")
+    .map((chunk) => chunk.trim())
+    .sort((a, b) => {
+      const numA = extractPageStart(a);
+      const numB = extractPageStart(b);
+      return numA - numB;
+    })
+    .join(", ");
+}
+
+function cleanStripMarkdown(text) {
+  if (!text) return "";
+
+  return text
+    .replace(/\\[`*]/g, "") // remove escaped formatting characters
+    .replace(/`([^`]+?)`/g, "$1")
+    .replace(/\*\*\*([^\*]+?)\*\*\*/g, "$1")
+    .replace(/\*\*([^\*]+?)\*\*/g, "$1")
+    .replace(/\*([^\*]+?)\*/g, "$1");
+}
+
+function extractPageStart(page) {
+  const raw = stripMarkdown(String(page || ""));
+  const matches = raw.match(/\d+/g);
+
+  if (!matches) return Number.MAX_SAFE_INTEGER;
+
+  const numbers = matches.map((n) => parseInt(n, 10));
+  return Math.min(...numbers);
+}
+
 // function to escape any special characters that broke... I mean, *might break*
 // regex functions.
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+// Replaces `something` with <code>something</code>
+function parseInlineMarkdown(text) {
+  if (!text) return "";
+
+  // Temporarily escape \* and \` to prevent accidental formatting
+  const ESC = {
+    backtick: "__ESC_BACKTICK__",
+    star: "__ESC_STAR__",
+  };
+
+  text = text.replace(/\\`/g, ESC.backtick).replace(/\\\*/g, ESC.star);
+
+  // Apply formatting
+  text = text
+    .replace(/`([^`]+?)`/g, "<code>$1</code>")
+    .replace(/\*\*\*([^\*]+?)\*\*\*/g, "<strong><em>$1</em></strong>")
+    .replace(/\*\*([^\*]+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^\*]+?)\*/g, "<em>$1</em>");
+
+  // Restore escaped characters
+  text = text
+    .replace(new RegExp(ESC.backtick, "g"), "`")
+    .replace(new RegExp(ESC.star, "g"), "*");
+
+  return text;
+}
+
+// Strips markdown formatting like backticks
+function stripMarkdown(text) {
+  if (!text) return "";
+
+  const ESC = {
+    backtick: "__ESC_BACKTICK__",
+    star: "__ESC_STAR__",
+  };
+
+  text = text.replace(/\\`/g, ESC.backtick).replace(/\\\*/g, ESC.star);
+
+  text = text
+    .replace(/`([^`]+?)`/g, "$1")
+    .replace(/\*\*\*([^\*]+?)\*\*\*/g, "$1")
+    .replace(/\*\*([^\*]+?)\*\*/g, "$1")
+    .replace(/\*([^\*]+?)\*/g, "$1");
+
+  text = text
+    .replace(new RegExp(ESC.backtick, "g"), "`")
+    .replace(new RegExp(ESC.star, "g"), "*");
+
+  return text;
+}
+
 function runInBrowser() {
   document
     .getElementById("create_index_button")
