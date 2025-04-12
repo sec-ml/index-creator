@@ -416,17 +416,48 @@ function stripMarkdown(text) {
   return text;
 }
 
+// actions to perform when `Create Index` pressed:
 function runInBrowser() {
+  // setup event handlers for export buttons
+  document.getElementById("export_csv_button").onclick = () =>
+    exportToCSV(currentRenderedData);
+  document.getElementById("export_excel_button").onclick = () =>
+    exportToExcel(currentRenderedData);
+
+  // setup event handler for collapse/expand button
+  document
+    .getElementById("toggle_collapse_button")
+    .addEventListener("click", () => {
+      isCollapsed = !isCollapsed;
+      document.getElementById("toggle_collapse_button").textContent =
+        isCollapsed ? "Expand duplicate fields" : "Collapse duplicate fields";
+      renderToHTML(currentRenderedData, isCollapsed);
+    });
+
+  // generate and render index
   document
     .getElementById("create_index_button")
     .addEventListener("click", () => {
+      document.getElementById("export_csv_button").style.display =
+        "inline-block";
+      document.getElementById("export_excel_button").style.display =
+        "inline-block";
+      document.getElementById("toggle_collapse_button").style.display =
+        "inline-block";
+
       const markdown = document.getElementById("index_input").value;
       const rows = parseMarkdownTable(markdown);
       const replacements = extractReplacements(rows);
       stripDefinitions(rows);
       applyReplacements(rows, replacements);
-      const processed = processData(rows);
-      renderToHTML(processed);
+      applyFieldInheritance(rows);
+      const flippedRows = expandFlippedRows(rows);
+      const splitRows = expandSplitRows(flippedRows);
+      const processed = processData(splitRows);
+
+      currentRenderedData = processed;
+      isCollapsed = true;
+      renderToHTML(currentRenderedData, isCollapsed);
     });
 }
 
