@@ -1,0 +1,79 @@
+[
+  {
+    "term": "(VMs) virtual machines",
+    "subTerm": "(VMs) Virtual machines",
+    "notes": "(VMs) Virtual Machines",
+    "book": 1,
+    "page": "10"
+  },
+  {
+    "term": "general multi-word casing test",
+    "subTerm": "general multi-word casing test, General multi-word casing test, General Multi-Word Casing Test",
+    "notes": "",
+    "book": 1,
+    "page": "10"
+  },
+  {
+    "term": "tactics, techniques & procedures (TTPs)",
+    "subTerm": "tactics, techniques & procedures (TTPs), Tactics, techniques & procedures (TTPs), Tactics, Techniques & Procedures (TTPs)",
+    "notes": "",
+    "book": 1,
+    "page": "10"
+  },
+  {
+    "term": "test maintaining acronyms as defined",
+    "subTerm": "(VMs) virtual machines",
+    "notes": "",
+    "book": 1,
+    "page": "10"
+  },
+  {
+    "term": "vulnerability",
+    "subTerm": "",
+    "notes": "Vulnerability is bad.",
+    "book": 1,
+    "page": "10"
+  },
+  {
+    "term": "vulnerability",
+    "subTerm": "",
+    "notes": "vulnerability is common.",
+    "book": 1,
+    "page": "10"
+  },
+  {
+    "term": "we will",
+    "subTerm": "we will we will rock you",
+    "notes": "",
+    "book": 1,
+    "page": "10"
+  },
+  {
+    "term": "We Will test capitalising all words",
+    "subTerm": "",
+    "notes": "",
+    "book": 1,
+    "page": "10"
+  },
+  {
+    "term": "we'll cancel this substitution out",
+    "subTerm": "",
+    "notes": "",
+    "book": 1,
+    "page": "10"
+  },
+  {
+    "term": "we'll escape\\^escape this caret out",
+    "subTerm": "",
+    "notes": "",
+    "book": 1,
+    "page": "10"
+  },
+  {
+    "term": "What about Vulnerability casing?",
+    "subTerm": "this test capitalisation of the first word",
+    "notes": "",
+    "book": 1,
+    "page": "10"
+  }
+]

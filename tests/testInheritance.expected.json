@@ -1,0 +1,30 @@
+[
+  {
+    "term": "term a",
+    "subTerm": "",
+    "notes": "some notes",
+    "book": 0,
+    "page": ""
+  },
+  {
+    "term": "term b",
+    "subTerm": "",
+    "notes": "some notes",
+    "book": 0,
+    "page": ""
+  },
+  {
+    "term": "term c",
+    "subTerm": "term d",
+    "notes": "some notes",
+    "book": 0,
+    "page": ""
+  },
+  {
+    "term": "term d",
+    "subTerm": "term c",
+    "notes": "some notes",
+    "book": 0,
+    "page": ""
+  }
+]

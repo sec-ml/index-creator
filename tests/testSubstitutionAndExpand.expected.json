@@ -1,0 +1,72 @@
+[
+  {
+    "term": "cat",
+    "subTerm": "Linux built-in",
+    "notes": "linux built-in commands",
+    "book": 1,
+    "page": "1, **10**, 15-16"
+  },
+  {
+    "term": "cd",
+    "subTerm": "Linux built-in",
+    "notes": "linux built-in commands",
+    "book": 1,
+    "page": "1, **10**, 15-16"
+  },
+  {
+    "term": "grep",
+    "subTerm": "Linux built-in",
+    "notes": "linux built-in commands",
+    "book": 1,
+    "page": "1, **10**, 15-16"
+  },
+  {
+    "term": "Linux built-in",
+    "subTerm": "cat",
+    "notes": "linux built-in commands",
+    "book": 1,
+    "page": "1, **10**, 15-16"
+  },
+  {
+    "term": "Linux built-in",
+    "subTerm": "cd",
+    "notes": "linux built-in commands",
+    "book": 1,
+    "page": "1, **10**, 15-16"
+  },
+  {
+    "term": "Linux built-in",
+    "subTerm": "grep",
+    "notes": "linux built-in commands",
+    "book": 1,
+    "page": "1, **10**, 15-16"
+  },
+  {
+    "term": "Linux built-in",
+    "subTerm": "mkdir",
+    "notes": "linux built-in commands",
+    "book": 1,
+    "page": "1, **10**, 15-16"
+  },
+  {
+    "term": "Linux built-in",
+    "subTerm": "tail",
+    "notes": "linux built-in commands",
+    "book": 1,
+    "page": "1, **10**, 15-16"
+  },
+  {
+    "term": "mkdir",
+    "subTerm": "Linux built-in",
+    "notes": "linux built-in commands",
+    "book": 1,
+    "page": "1, **10**, 15-16"
+  },
+  {
+    "term": "tail",
+    "subTerm": "Linux built-in",
+    "notes": "linux built-in commands",
+    "book": 1,
+    "page": "1, **10**, 15-16"
+  }
+]
