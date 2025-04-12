@@ -341,20 +341,86 @@ function runTests() {
 
   const passed = JSON.stringify(processed) === JSON.stringify(expected_output);
 
-  if (passed) {
-    console.log("✅ Test passed.");
-    process.exit(0);
-  } else {
-    console.error("❌ Test failed.");
-    console.error("Expected:", JSON.stringify(expected_output, null, 2));
-    console.error("Received:", JSON.stringify(processed, null, 2));
-    process.exit(1);
+// Function to run test cases (defined in files in tests directory),
+// using -t - compares testcase to the content in .expected.json file
+// When also run with --update-expected=<testname>, the expected outcome is
+// written to testname.expected.json (file needs to exist and contain [])
+function runTests() {
+  const fs = require("fs");
+  const path = require("path");
+  const updateArg = process.argv.find((arg) =>
+    arg.startsWith("--update-expected=")
+  );
+  const updateTarget = updateArg ? updateArg.split("=")[1] : null;
+
+  const testDir = path.join(__dirname, "tests");
+
+  const allowedExtensions = [".md", ".txt", ".csv"];
+  const testFiles = fs
+    .readdirSync(testDir)
+    .filter((f) => allowedExtensions.includes(path.extname(f)));
+
+  // count test failures to report at the end
+  let allPassed = true;
+  let totalTests = testFiles.length;
+  let failedCount = 0;
+
+  for (const testFile of testFiles) {
+    const base = path.basename(testFile, path.extname(testFile));
+    const expectedFile = base + ".expected.json";
+
+    const inputPath = path.join(testDir, testFile);
+    const expectedPath = path.join(testDir, expectedFile);
+
+    if (!fs.existsSync(expectedPath)) {
+      console.warn(`⚠️ Skipping "${testFile}" — no matching expected output.`);
+      continue;
+    }
+
+    console.log(`📋 Running ${base}${path.extname(testFile)}`);
+
+    const markdown = fs.readFileSync(inputPath, "utf-8");
+    const expected = JSON.parse(fs.readFileSync(expectedPath, "utf-8"));
+
+    // Run full processing on test cases
+    const rows = parseMarkdownTable(markdown);
+    const replacements = extractReplacements(rows);
+    stripDefinitions(rows);
+    applyReplacements(rows, replacements);
+    applyFieldInheritance(rows);
+    const flippedRows = expandFlippedRows(rows);
+    const splitRows = expandSplitRows(flippedRows);
+    const processed = processData(splitRows);
+
+    const result = JSON.stringify(processed, null, 2);
+    if (updateTarget === base) {
+      fs.writeFileSync(expectedPath, result + "\n");
+      console.log(`📝 Updated expected output for "${base}"`);
+      continue;
+    }
+
+    const expectedJson = JSON.stringify(expected, null, 2);
+
+    if (result === expectedJson) {
+      console.log(`✅ ${base} passed`);
+    } else {
+      console.error(`❌ ${base} failed`);
+      console.error("Expected:", expectedJson);
+      console.error("Received:", result);
+      allPassed = false;
+      failedCount++;
+    }
   }
+
+  const passedCount = totalTests - failedCount;
+  console.log(`\n✅ ${passedCount}/${totalTests} tests passed.`);
+  process.exit(allPassed ? 0 : 1);
 }
 
 if (
   (typeof INCLUDE_TESTS === "undefined" || INCLUDE_TESTS) &&
   typeof process !== "undefined" &&
+  typeof require !== "undefined" &&
   process.argv &&
   process.argv.includes("-t")
 ) {
