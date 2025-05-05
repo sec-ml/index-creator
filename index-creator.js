@@ -474,6 +474,7 @@ function renderToHTML(data, isCollapsed) {
 
   document.getElementById("output").innerHTML = "";
   document.getElementById("output").appendChild(table);
+  table.style.fontSize = `${getCurrentFontSize()}px`;
 }
 
 // util functions
@@ -614,6 +615,13 @@ function stripMarkdown(text) {
 
 // actions to perform when `Create Index` pressed:
 function runInBrowser() {
+  // helper function to get currently selected font size
+  function getCurrentFontSize() {
+    const input = document.getElementById("print_font_size");
+    const val = parseInt(input?.value, 10);
+    return Math.max(1, Math.min(200, isNaN(val) ? 10 : val));
+  }
+
   // setup event handlers for export buttons
   document.getElementById("export_csv_button").onclick = () =>
     exportToCSV(currentRenderedData);
@@ -630,6 +638,67 @@ function runInBrowser() {
       renderToHTML(currentRenderedData, isCollapsed);
     });
 
+  // setup print size functionality
+
+  function setupFontSizeControls() {
+    const input = document.getElementById("print_font_size");
+    const incBtn = document.getElementById("increase_font");
+    const decBtn = document.getElementById("decrease_font");
+    const printBtn = document.getElementById("print_button");
+
+    function updatePrintButtonFontSize(sizePx) {
+      const sanitized = Math.max(1, Math.min(200, parseInt(sizePx, 10) || 10));
+      input.value = sanitized;
+
+      const styleStr = `table {font-size: ${sanitized}px;}`;
+      printBtn.setAttribute(
+        "onclick",
+        `printJS({printable: 'output', type: 'html', scanStyles: false, css: 'print.css', style: '${styleStr}'})`
+      );
+
+      // update the rendered table's font size if it exists (live preview of selected font size)
+      const table = document.querySelector("#output table");
+      if (table) {
+        table.style.fontSize = `${sanitized}px`;
+      }
+    }
+
+    input.addEventListener("input", () =>
+      updatePrintButtonFontSize(input.value)
+    );
+    incBtn.addEventListener("click", () =>
+      updatePrintButtonFontSize(+input.value + 1)
+    );
+    decBtn.addEventListener("click", () =>
+      updatePrintButtonFontSize(+input.value - 1)
+    );
+
+    updatePrintButtonFontSize(input.value); // set initial
+  }
+
+  setupFontSizeControls();
+
+  // intercept Cmd/Ctrl + P and trigger custom print
+  window.addEventListener("keydown", (e) => {
+    const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+    const isPrintShortcut = (isMac && e.metaKey) || (!isMac && e.ctrlKey);
+
+    if (isPrintShortcut && e.key.toLowerCase() === "p") {
+      e.preventDefault();
+
+      const size = getCurrentFontSize();
+      const styleStr = `table {font-size: ${size}px;}`;
+
+      printJS({
+        printable: "output",
+        type: "html",
+        scanStyles: false,
+        css: "print.css",
+        style: styleStr,
+      });
+    }
+  });
+
   // generate and render index
   document
     .getElementById("create_index_button")
@@ -640,6 +709,8 @@ function runInBrowser() {
         "inline-block";
       document.getElementById("toggle_collapse_button").style.display =
         "inline-block";
+      document.getElementById("print_button").style.display = "inline-block";
+      document.getElementById("font_selector").style.display = "inline-block";
 
       const markdown = document.getElementById("index_input").value;
       const rows = parseMarkdownTable(markdown);

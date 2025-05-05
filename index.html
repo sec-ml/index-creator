@@ -15,6 +15,7 @@
         border-collapse: collapse;
         width: 100%;
         margin-top: 1rem;
+        font-size: 10px;
       }
       th,
       td {
@@ -46,9 +47,33 @@
       Expand duplicate fields
     </button>
 
+    <div id="font_selector" style="display: none">
+      <label for="print_font_size" style="font-size: 11px">Font size:</label>
+      <button id="decrease_font">&minus;</button>
+      <input
+        type="number"
+        id="print_font_size"
+        value="10"
+        min="1"
+        max="200"
+        style="width: 3em"
+      />
+      <button id="increase_font">&plus;</button>
+    </div>
+
+    <button
+      id="print_button"
+      style="display: none; margin-left: 1em"
+      type="button"
+      onclick="printJS({printable: 'output', type: 'html', scanStyles: false, css: 'print.css'})"
+    >
+      Print Form
+    </button>
+
     <div id="output"></div>
 
     <script src="index-creator.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://printjs-4de6.kxcdn.com/print.min.js"></script>
   </body>
 </html>
