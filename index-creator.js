@@ -497,7 +497,10 @@ function renderToHTML(data, isCollapsed) {
 
   document.getElementById("output").innerHTML = "";
   document.getElementById("output").appendChild(table);
-  table.style.fontSize = `${getCurrentFontSize()}px`;
+
+  // don't think we actually need this here. Wasn't able to access
+  // getCurrentFontSize() anyway. TODO: check and remove.
+  // table.style.fontSize = `${getCurrentFontSize()}px`;
 }
 
 // util functions
