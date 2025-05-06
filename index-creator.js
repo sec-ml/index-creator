@@ -2,19 +2,32 @@
 // For Markdown: Recognises headers from the first line, skips the divider.
 // Each row is mapped to a dictionary.
 // Flags comment rows (starting with '?') with _ignore: true.
-function parseMarkdownTable(markdown) {
+function parseMarkdownTable(markdown, hasHeaders = true) {
   const lines = markdown
     .trim()
     .split("\n")
     .map((line) => line.trim());
 
-  if (lines.length < 2) return [];
+  if (lines.length < 1) return [];
 
-  const headers = lines[0]
-    .replace(/^\||\|$/g, "")
-    .split("|")
-    .map((h) => h.trim());
-  const dataLines = lines.slice(2);
+  let headers;
+  let dataLines;
+
+  if (hasHeaders) {
+    // check first line (header row)
+    // strip leading/trailing pipes and split by remaining pipe delimiters
+    headers = lines[0]
+      .replace(/^\||\|$/g, "")
+      .split("|")
+      .map((h) => h.trim()); // trim each header
+
+    // skip divider row (e.g. | --- | --- |)
+    dataLines = lines.slice(2);
+  } else {
+    // assume default column order when headers are missing
+    headers = ["term", "sub-term", "notes", "book", "page"];
+    dataLines = lines;
+  }
 
   const rows = dataLines.map((line) => {
     const cells = line
@@ -639,6 +652,30 @@ function stripMarkdown(text) {
   return text;
 }
 
+// check whether input looks like Markdown table with headers
+// assumes header row followed by a divider row like: | --- | --- |
+function isProbMarkdownWithHeaders(lines) {
+  const headerLine = lines[0] || "";
+  const dividerLine = lines[1] || "";
+
+  return (
+    headerLine.includes("|") && // first line looks like column headers
+    dividerLine.match(/^(\|?[\s-]+\|?)+$/) // second line is a divider
+  );
+}
+
+// checks whether first line of CSV input looks like it contains headers
+// compares to expected column names (case-insensitive)
+function isProbCSVWithHeaders(firstLine) {
+  const expectedHeaders = ["term", "sub-term", "notes", "book", "page"];
+
+  // split first line into fields and normalise for comparison
+  const fields = firstLine.split(",").map((f) => f.trim().toLowerCase());
+
+  // check that every expected header is present somewhere in the fields
+  return expectedHeaders.every((header) => fields.includes(header));
+}
+
 // actions to perform when `Create Index` pressed:
 function runInBrowser() {
   const dividerBtn = document.getElementById("insert_dividers_button");
@@ -713,10 +750,10 @@ function runInBrowser() {
     const printBtn = document.getElementById("print_button");
 
     function updatePrintButtonFontSize(sizePx) {
-      const sanitized = Math.max(1, Math.min(200, parseInt(sizePx, 10) || 10));
-      input.value = sanitized;
+      const sanitised = Math.max(1, Math.min(200, parseInt(sizePx, 10) || 10));
+      input.value = sanitised;
 
-      const styleStr = `table {font-size: ${sanitized}px;}`;
+      const styleStr = `table {font-size: ${sanitised}px;}`;
       printBtn.setAttribute(
         "onclick",
         `printJS({printable: 'output', type: 'html', scanStyles: false, css: 'print.css', style: '${styleStr}'})`
@@ -725,7 +762,7 @@ function runInBrowser() {
       // update the rendered table's font size if it exists (live preview of selected font size)
       const table = document.querySelector("#output table");
       if (table) {
-        table.style.fontSize = `${sanitized}px`;
+        table.style.fontSize = `${sanitised}px`;
       }
     }
 
@@ -769,6 +806,7 @@ function runInBrowser() {
   document
     .getElementById("create_index_button")
     .addEventListener("click", () => {
+      // setup UI buttons
       document.getElementById("export_csv_button").style.display =
         "inline-block";
       document.getElementById("export_excel_button").style.display =
@@ -786,15 +824,9 @@ function runInBrowser() {
       document.getElementById("toggle_collapse_button").textContent =
         "Expand Duplicate Fields";
 
-      const markdown = document.getElementById("index_input").value;
-      const rows = parseMarkdownTable(markdown);
-      const replacements = extractReplacements(rows);
-      stripDefinitions(rows);
-      applyReplacements(rows, replacements);
-      applyFieldInheritance(rows);
-      const flippedRows = expandFlippedRows(rows);
-      const splitRows = expandSplitRows(flippedRows);
-      const processed = processData(splitRows);
+      // get user input and process
+      const input = document.getElementById("index_input").value;
+      const processed = processInputText(input);
 
       currentRenderedData = processed;
       isCollapsed = true;
@@ -960,6 +992,149 @@ function runTests() {
   const passedCount = totalTests - failedCount;
   console.log(`\n✅ ${passedCount}/${totalTests} tests passed.`);
   process.exit(allPassed ? 0 : 1);
+}
+
+// parse single line of CSV into an array of values
+// supports quoted fields and escaped quotes
+function parseCSVLine(line) {
+  const result = [];
+  let current = ""; // track current cell being built
+  let inQuotes = false; // track whether we're inside a quoted field
+  let i = 0; // pos in input line
+
+  while (i < line.length) {
+    const char = line[i];
+
+    if (inQuotes) {
+      if (char === '"') {
+        // handle escaped quote ("") within a quoted field
+        if (line[i + 1] === '"') {
+          current += '"'; // add one literal quote
+          i += 2; // skip both quotes
+        } else {
+          inQuotes = false; // close quote found
+          i++;
+        }
+      } else {
+        // regular character inside quotes
+        current += char;
+        i++;
+      }
+    } else {
+      if (char === '"') {
+        // start of quoted field
+        inQuotes = true;
+        i++;
+      } else if (char === ",") {
+        // normal comma delim
+        result.push(current.trim());
+        current = "";
+        i++;
+      } else {
+        // regular char outside quotes
+        current += char;
+        i++;
+      }
+    }
+  }
+
+  result.push(current.trim());
+  return result;
+}
+
+// parse CSV string into array of row objects
+// handles headers (or assumes default column order), quoted fields, and ?comment rows
+function parseCSVTable(csv, hasHeaders = true) {
+  // split input into non-empty trimmed lines
+  const lines = csv
+    .trim()
+    .split("\n")
+    .map((line) => line.trim());
+
+  if (lines.length < 1) return [];
+
+  let headers;
+  let dataLines;
+
+  if (hasHeaders) {
+    // use the first line as column headers (checking for quoted fields, just in case)
+    headers = parseCSVLine(lines[0]);
+    dataLines = lines.slice(1); // remaining lines are data
+  } else {
+    // if no headers, assume default column names in fixed order
+    headers = ["term", "sub-term", "notes", "book", "page"];
+    dataLines = lines;
+  }
+
+  const rows = dataLines.map((line) => {
+    // parse the current line into cells
+    const cells = parseCSVLine(line);
+    const row = {};
+
+    // map each cell to corresponding header field
+    headers.forEach((header, i) => {
+      row[header] = cells[i] || "";
+    });
+
+    // handle comment rows: if term starts with "?", mark as ignored
+    const term = row.term?.trim() || "";
+    if (term.startsWith("?")) {
+      row._ignore = true;
+      console.log(`Ignoring row: ${term}`);
+    }
+
+    return row;
+  });
+
+  return rows;
+}
+
+// processes raw pasted or loaded index input (CSV or Markdown)
+// detects format and header presence if not explicitly provided
+// applies the full transformation pipeline and returns processed row objects
+function processInputText(text, options = {}) {
+  const trimmed = text.trim(); // remove leading/trailing whitespace
+  const lines = trimmed.split("\n"); // split into lines
+
+  // auto-detect format unless explicitly provided...
+  //// CSV if there are commas and no pipe characters
+  //// default to Markdown otherwise
+  const format =
+    options.format ||
+    (trimmed.includes(",") && !trimmed.includes("|") ? "csv" : "markdown");
+
+  // auto-detect whether headers are present if not explicitly given
+  const hasHeaders =
+    "hasHeaders" in options
+      ? options.hasHeaders
+      : format === "markdown"
+      ? isProbMarkdownWithHeaders(lines) // check for header + divider line
+      : isProbCSVWithHeaders(lines[0]); // check if first line matches expected headers
+
+  // parse raw input into row objects based on format
+  let rows;
+  if (format === "markdown") {
+    rows = parseMarkdownTable(trimmed, hasHeaders);
+  } else if (format === "csv") {
+    rows = parseCSVTable(trimmed, hasHeaders);
+  }
+
+  // full transform pipeline:
+  // 1. extract and store ^replacements
+  // 2. strip definitions but keep shorthand tokens
+  // 3. replace shorthand terms across fields
+  // 4. apply ^^ inheritance (copy-down)
+  // 5. expand any flipped or multi-value fields
+  // 6. apply rule logic, sort, and normalise pages
+  const replacements = extractReplacements(rows);
+  stripDefinitions(rows);
+  applyReplacements(rows, replacements);
+  applyFieldInheritance(rows);
+  const flipped = expandFlippedRows(rows);
+  const split = expandSplitRows(flipped);
+
+  // final normalised, sorted, de-duped output
+  return processData(split);
 }
 
 if (
