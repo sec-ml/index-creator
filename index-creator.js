@@ -391,6 +391,17 @@ function renderToHTML(data, isCollapsed) {
     let i = 0;
     while (i < data.length) {
       const current = data[i];
+
+      if (current.divider) {
+        rows.push(`
+    <tr class="divider-row">
+      <td colspan="5"><strong>${current.divider}</strong></td>
+    </tr>
+  `);
+        i++;
+        continue;
+      }
+
       const termGroup = data
         .slice(i)
         .filter((row) => row.term === current.term);
@@ -448,6 +459,15 @@ function renderToHTML(data, isCollapsed) {
   } else {
     // expanded view — no rowspan, show all values. Exports to CSV/Excel with current view
     data.forEach((row) => {
+      if (row.divider) {
+        rows.push(`
+      <tr class="divider-row">
+        <td colspan="5"><strong>${row.divider}</strong></td>
+      </tr>
+    `);
+        return; // skip rendering the rest of this row
+      }
+
       rows.push(`
         <tr>
           <td>${parseInlineMarkdown(row.term)}</td>
@@ -615,6 +635,46 @@ function stripMarkdown(text) {
 
 // actions to perform when `Create Index` pressed:
 function runInBrowser() {
+  const dividerBtn = document.getElementById("insert_dividers_button");
+  dividerBtn?.addEventListener("click", () => {
+    const hasDividers = currentRenderedData.some((row) => row.divider);
+
+    if (hasDividers) {
+      currentRenderedData = currentRenderedData.filter((row) => !row.divider);
+      dividerBtn.textContent = "Insert Letter Dividers";
+    } else {
+      currentRenderedData = insertLetterDividers(currentRenderedData);
+      dividerBtn.textContent = "Remove Letter Dividers";
+    }
+
+    renderToHTML(currentRenderedData, isCollapsed);
+  });
+
+  // Inserts alphabetical (well, first character) divider rows (e.g., A, B, C,
+  // numbers, special chars) before each new first character
+  function insertLetterDividers(data) {
+    if (!Array.isArray(data)) return data;
+
+    const result = [];
+    let lastLetter = null;
+
+    for (const row of data) {
+      if (row._ignore || row.divider) {
+        result.push(row);
+        continue;
+      }
+
+      const letter = stripMarkdown(row.term).charAt(0).toUpperCase();
+      if (letter !== lastLetter) {
+        result.push({ divider: letter });
+        lastLetter = letter;
+      }
+      result.push(row);
+    }
+
+    return result;
+  }
+
   // helper function to get currently selected font size
   function getCurrentFontSize() {
     const input = document.getElementById("print_font_size");
@@ -634,7 +694,7 @@ function runInBrowser() {
     .addEventListener("click", () => {
       isCollapsed = !isCollapsed;
       document.getElementById("toggle_collapse_button").textContent =
-        isCollapsed ? "Expand duplicate fields" : "Collapse duplicate fields";
+        isCollapsed ? "Expand duplicate fields" : "Collapse Duplicate Fields";
       renderToHTML(currentRenderedData, isCollapsed);
     });
 
@@ -711,6 +771,14 @@ function runInBrowser() {
         "inline-block";
       document.getElementById("print_button").style.display = "inline-block";
       document.getElementById("font_selector").style.display = "inline-block";
+      document.getElementById("insert_dividers_button").style.display =
+        "inline-block";
+
+      // set button text back if 'create index' is pressed again
+      document.getElementById("insert_dividers_button").textContent =
+        "Insert Letter Dividers";
+      document.getElementById("toggle_collapse_button").textContent =
+        "Expand Duplicate Fields";
 
       const markdown = document.getElementById("index_input").value;
       const rows = parseMarkdownTable(markdown);
@@ -730,13 +798,15 @@ function runInBrowser() {
 
 // called by other export functions (below)
 function getExportData(data, isCollapsed) {
-  if (!isCollapsed) return data; // return full data for expanded mode
+  // ensure that exported data does not include divider characters
+  const filtered = data.filter((row) => !row.divider);
+  //if (!isCollapsed) return data; // return full data for expanded mode
 
   const exportData = [];
   let lastTerm = null;
   let lastSubTerm = null;
 
-  for (const row of data) {
+  for (const row of filtered) {
     const term = row.term === lastTerm ? "" : row.term;
     const subTerm =
       row.term === lastTerm && row.subTerm === lastSubTerm ? "" : row.subTerm;
