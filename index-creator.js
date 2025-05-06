@@ -240,7 +240,10 @@ function applyFieldInheritance(rows) {
     if (row._ignore) return;
 
     for (const field of ["term", "sub-term", "notes", "book", "page"]) {
-      if ((row[field] || "").trim() === "^^") {
+      const value = (row[field] || "").trim();
+
+      // treat blank `term` as ^^
+      if ((field === "term" && value === "") || value === "^^") {
         row[field] = lastRow[field] || "";
         console.log(
           `Row ${rowIndex}: copying "${field}" from previous row -> "${row[field]}"`
@@ -334,7 +337,7 @@ function processData(rows) {
 
     // Default/fallback - use term, book and page from previous row
     else {
-      term = rawTerm || last.term;
+      term = rawTerm;
       subTerm = rawSubTerm;
       notes = rawNotes;
       book = hasBook ? parseInt(rawBook) : last.book;
