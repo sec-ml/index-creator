@@ -34,16 +34,33 @@
     </style>
   </head>
   <body>
+    <details id="metadata_section" style="margin-top: 1em">
+      <summary><strong>Index Metadata</strong></summary>
+      <div style="margin-top: 0.5em">
+        <label for="meta_title">Title (optional):</label><br />
+        <input
+          type="text"
+          id="meta_title"
+          placeholder="Index Title"
+          style="width: 100%"
+        />
+      </div>
+    </details>
+
     <h2>Paste content:</h2>
     <textarea id="index_input"></textarea>
+    <input
+      type="file"
+      id="import_csv_file"
+      accept=".csv"
+      style="display: none"
+    />
+    <button id="import_csv_button">Import CSV</button>
     <button id="create_index_button">Create Index!</button>
 
     <h2>Index:</h2>
-    <button id="export_csv_button" style="display: none; margin-bottom: 1em">
-      Export to CSV
-    </button>
-    <button id="export_excel_button" style="display: none; margin-left: 1em">
-      Export to Excel
+    <button id="save_to_csv_button" style="display: none; margin-bottom: 1em">
+      Save to CSV
     </button>
     <button
       id="toggle_collapse_button"
