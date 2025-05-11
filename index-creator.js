@@ -1,3 +1,6 @@
+let dividerRowsEnabled = false;
+let isCollapsed = true;
+
 // Takes pasted index content as one long string, parses into an array of row objects.
 // For Markdown: Recognises headers from the first line, skips the divider.
 // Each row is mapped to a dictionary.
@@ -276,7 +279,7 @@ function applyFieldInheritance(rows) {
 // - Normalises and sorts by term, sub-term, and first page number
 // - Converts the page string into a consistent format
 // - Handles special rules like `term*` and blank sub-terms. -- obsolete. `&&` supersedes
-// The output is sorted for HTML or export rendering.
+// The output is sorted for HTML rendering.
 function processData(rows) {
   const processed = [];
   let last = { term: "", subTerm: "", notes: "", book: 0, page: "" };
@@ -393,17 +396,11 @@ function processData(rows) {
 // Page numbers are wrapped in span tags for styling (allows CSS to prevent page
 // number ranges being split across lines).
 function renderToHTML(data, isCollapsed) {
-  document.getElementById("export_csv_button").onclick = () =>
-    exportToCSV(data);
-  document.getElementById("export_excel_button").onclick = () =>
-    exportToExcel(data);
-
   const table = document.createElement("table");
   const rows = [];
 
   if (isCollapsed) {
     // default view == collapsed mode — uses rowspan to reduce visual duplication
-    // Exports to CSV/Excel with current view
     let i = 0;
     while (i < data.length) {
       const current = data[i];
@@ -473,7 +470,7 @@ function renderToHTML(data, isCollapsed) {
       i += termRowspan;
     }
   } else {
-    // expanded view — no rowspan, show all values. Exports to CSV/Excel with current view
+    // expanded view — no rowspan, show all values
     data.forEach((row) => {
       if (row.divider) {
         rows.push(`
@@ -508,12 +505,18 @@ function renderToHTML(data, isCollapsed) {
     </tbody>
   `;
 
+  table.style.fontSize = `${getCurrentFontSize()}px`;
+
   document.getElementById("output").innerHTML = "";
   document.getElementById("output").appendChild(table);
 
   // don't think we actually need this here. Wasn't able to access
   // getCurrentFontSize() anyway. TODO: check and remove.
   // table.style.fontSize = `${getCurrentFontSize()}px`;
+  // -- moved to above setting of output element a few lines above. TODO: clean this up
+
+  showControls();
+  updateControls();
 }
 
 // util functions
@@ -676,60 +679,338 @@ function isProbCSVWithHeaders(firstLine) {
   return expectedHeaders.every((header) => fields.includes(header));
 }
 
+// parses CSV string, updates UI with the loaded index content,
+// applies transform rules, renders content, and restores applicable
+// metadata settings.
+// plus: saves  original input for export and comparison.
+
+function importCSVFromString(content) {
+  const parsed = parseCSVTable(content, true);
+  const { rows, meta } = parsed;
+  console.log("Parsed rows:", rows);
+  console.log("Parsed meta:", meta);
+
+  // copy and store original parsed rows (globally), so exports and comparisons use unprocessed input content
+  if (typeof globalThis !== "undefined") {
+    globalThis.originalParsedRows = JSON.parse(JSON.stringify(rows));
+  }
+  // run full processing on CSV string (replacements, splits, sorting, etc.)
+  const processed = processInputText(content, {
+    format: "csv",
+    hasHeaders: true,
+  });
+
+  if (typeof document !== "undefined") {
+    // clear any previously rendered index data, divider state to prevent issues when rendering another file
+    currentRenderedData = [];
+    dividerRowsEnabled = false;
+
+    document.getElementById("index_input").value = buildCSVText(rows); // update textarea with loaded content
+
+    // conditionally re-add divider rows if previously toggled on
+    currentRenderedData = dividerRowsEnabled
+      ? insertLetterDividers(processed)
+      : processed;
+
+    // default to collapsed view after import (can be overridden later by metadata)
+    // do we still need this?
+    isCollapsed = true;
+
+    // render processed data into the HTML table
+    renderToHTML(currentRenderedData, isCollapsed);
+
+    // apply saved metadata values (title, font size, collapse/divider settings + other future stuff)
+    if (typeof populateMetadataForm === "function") {
+      populateMetadataForm(meta || {});
+    }
+  }
+
+  return processed;
+}
+
+// converts array of row objects into a CSV-formatted string.
+// Escapes fields as req & joins with commas and newlines.
+function buildCSVText(rows) {
+  const headers = ["term", "sub-term", "notes", "book", "page"];
+  const csvLines = [headers];
+
+  // for each row, map fields to escaped values in the correct order
+  for (const row of rows) {
+    const line = headers.map((key) => escapeCSVField(row[key] || ""));
+    csvLines.push(line);
+  }
+
+  // join rows into CSV string, first by commas (fields), then by newlines (rows)
+  return csvLines.map((r) => r.join(",")).join("\n");
+}
+
+function escapeCSVField(value) {
+  const str = String(value);
+  // If field contains comma, quote, or newline, wrap in quotes and escape internal quotes
+  if (/[",\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+// annoying, but move to global scope
+function populateMetadataForm(meta = {}) {
+  document.getElementById("meta_title").value = meta.title || "";
+  document.getElementById("meta_css").value = meta.customCSS || "";
+
+  // Set font size input and apply to table
+  if (meta.fontSize && !isNaN(meta.fontSize)) {
+    const fontInput = document.getElementById("print_font_size");
+    if (fontInput) {
+      fontInput.value = meta.fontSize;
+
+      const table = document.querySelector("#output table");
+      if (table) {
+        table.style.fontSize = `${meta.fontSize}px`;
+      }
+    }
+  }
+
+  // Set collapse toggle button and state
+  if (typeof meta.collapsed === "boolean") {
+    isCollapsed = meta.collapsed;
+    const collapseBtn = document.getElementById("toggle_collapse_button");
+    if (collapseBtn) {
+      collapseBtn.textContent = isCollapsed
+        ? "Expand duplicate fields"
+        : "Collapse Duplicate Fields";
+    }
+  }
+
+  // Insert dividers if meta.hasDividers is true
+  if (meta.hasDividers && Array.isArray(currentRenderedData)) {
+    currentRenderedData = insertLetterDividers(currentRenderedData);
+    dividerRowsEnabled = true; // ✅ ensure flag matches data
+    const dividerBtn = document.getElementById("insert_dividers_button");
+    if (dividerBtn) {
+      dividerBtn.textContent = "Remove Letter Dividers";
+    }
+  } else {
+    dividerRowsEnabled = false; // ✅ ensure clean state
+  }
+
+  // Re-render with current settings
+  if (Array.isArray(currentRenderedData)) {
+    renderToHTML(currentRenderedData, isCollapsed);
+  }
+}
+
+// show hidden HTML elements
+function showControls() {
+  document.getElementById("save_to_csv_button").style.display = "inline-block";
+  document.getElementById("toggle_collapse_button").style.display =
+    "inline-block";
+  document.getElementById("print_button").style.display = "inline-block";
+  document.getElementById("font_selector").style.display = "inline-block";
+  document.getElementById("insert_dividers_button").style.display =
+    "inline-block";
+}
+
+// update control element show/state
+function updateControls() {
+  const dividerBtn = document.getElementById("insert_dividers_button");
+  if (dividerBtn) {
+    dividerBtn.textContent = dividerRowsEnabled
+      ? "Remove Letter Dividers"
+      : "Insert Letter Dividers";
+  }
+
+  const collapseBtn = document.getElementById("toggle_collapse_button");
+  if (collapseBtn) {
+    collapseBtn.textContent = isCollapsed
+      ? "Expand Duplicate Fields"
+      : "Collapse Duplicate Fields";
+  }
+
+  const fontInput = document.getElementById("print_font_size");
+  const table = document.querySelector("#output table");
+  if (fontInput && table) {
+    table.style.fontSize = `${getCurrentFontSize()}px`;
+  }
+}
+
+// Inserts alphabetical (well, first character) divider rows (e.g., A, B, C,
+// numbers, special chars) before each new first character
+function insertLetterDividers(data) {
+  if (!Array.isArray(data)) return data;
+
+  const result = [];
+  let lastLetter = null;
+
+  for (const row of data) {
+    if (row._ignore || row.divider) {
+      result.push(row);
+      continue;
+    }
+
+    const letter = stripMarkdown(row.term).charAt(0).toUpperCase();
+    if (letter !== lastLetter) {
+      result.push({ divider: letter });
+      lastLetter = letter;
+    }
+    result.push(row);
+  }
+
+  return result;
+}
+
+// helper function to get currently selected font size
+function getCurrentFontSize() {
+  const input = document.getElementById("print_font_size");
+  const val = parseInt(input?.value, 10);
+  return Math.max(1, Math.min(200, isNaN(val) ? 10 : val));
+}
+
 // actions to perform when `Create Index` pressed:
 function runInBrowser() {
+  // Serialises current index data & metadata into downloadable CSV file.
+  // Includes meta row for title, font size, collapse/divider settings, etc.
+  function saveToCSV(data) {
+    const headers = ["Term", "Sub-term", "Notes", "Book", "Page"];
+
+    // use original (unprocessed) parsed rows to preserve formatting and special syntax
+    const rawRows =
+      (typeof globalThis !== "undefined" && globalThis.originalParsedRows) ||
+      [];
+
+    // strip out ignored rows and convert remaining rows into flat field arrays
+    const csvRows = rawRows
+      .filter((row) => !row._ignore)
+      .map((row) => [
+        row.term || "",
+        row["sub-term"] || "",
+        row.notes || "",
+        row.book || "",
+        row.page || "",
+      ]);
+
+    // gather metadata from form fields (title, font size, etc.)
+    const meta = getMetadataFromForm();
+
+    // insert meta row directly after headers to preserve user settings in export
+    const metaRow = [`?meta: ${JSON.stringify(meta)}`];
+
+    // headers first, then meta row, then data...
+    const csvArray = [headers, metaRow, ...csvRows];
+
+    // escape all fields and convert into a CSV string with quoted values
+    // update this... Doing something different on load/input, where we identify
+    // what NEEDS quotes. Feels like we're doubling up effort here
+    const csvContent = csvArray
+      .map((r) =>
+        r.map((field) => `"${String(field).replace(/"/g, '""')}"`).join(",")
+      )
+      .join("\n");
+
+    // create  downloadable CSV file from content string
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+
+    // Use title from meta (if any) for filename
+    const safeTitle = (meta.title || "index").replace(/[^\w-]+/g, "_");
+    a.download = `${safeTitle}.csv`;
+
+    // trigger download by simulating a click on a temp anchor element
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  function getMetadataFromForm() {
+    return {
+      title: document.getElementById("meta_title")?.value?.trim() || null,
+      customCSS: document.getElementById("meta_css")?.value?.trim() || null,
+      fontSize:
+        parseInt(document.getElementById("print_font_size")?.value, 10) || null,
+      collapsed: !!isCollapsed,
+      hasDividers: currentRenderedData?.some((row) => row.divider) || false,
+    };
+  }
+
+  function setupImportButtonHandler() {
+    const input = document.getElementById("import_csv_file");
+    if (!input) return;
+
+    input.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const content = reader.result;
+        importCSVFromString(content);
+
+        // reset to blank, so file can be reloaded without browser thinking it's the same
+        input.value = "";
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  setupImportButtonHandler();
+
+  const importButton = document.getElementById("import_csv_button");
+  const fileInput = document.getElementById("import_csv_file");
+
+  if (importButton && fileInput) {
+    importButton.addEventListener("click", () => {
+      fileInput.click(); // show file picker
+    });
+  }
+
   const dividerBtn = document.getElementById("insert_dividers_button");
   dividerBtn?.addEventListener("click", () => {
     const hasDividers = currentRenderedData.some((row) => row.divider);
+    dividerRowsEnabled = !hasDividers;
 
-    if (hasDividers) {
-      currentRenderedData = currentRenderedData.filter((row) => !row.divider);
-      dividerBtn.textContent = "Insert Letter Dividers";
-    } else {
+    if (dividerRowsEnabled) {
       currentRenderedData = insertLetterDividers(currentRenderedData);
       dividerBtn.textContent = "Remove Letter Dividers";
+    } else {
+      currentRenderedData = currentRenderedData.filter((row) => !row.divider);
+      dividerBtn.textContent = "Insert Letter Dividers";
     }
 
     renderToHTML(currentRenderedData, isCollapsed);
   });
 
-  // Inserts alphabetical (well, first character) divider rows (e.g., A, B, C,
-  // numbers, special chars) before each new first character
-  function insertLetterDividers(data) {
-    if (!Array.isArray(data)) return data;
+  // tried moving to global scope. TODO: clean this up
+  // // Inserts alphabetical (well, first character) divider rows (e.g., A, B, C,
+  // // numbers, special chars) before each new first character
+  // function insertLetterDividers(data) {
+  //   if (!Array.isArray(data)) return data;
 
-    const result = [];
-    let lastLetter = null;
+  //   const result = [];
+  //   let lastLetter = null;
 
-    for (const row of data) {
-      if (row._ignore || row.divider) {
-        result.push(row);
-        continue;
-      }
+  //   for (const row of data) {
+  //     if (row._ignore || row.divider) {
+  //       result.push(row);
+  //       continue;
+  //     }
 
-      const letter = stripMarkdown(row.term).charAt(0).toUpperCase();
-      if (letter !== lastLetter) {
-        result.push({ divider: letter });
-        lastLetter = letter;
-      }
-      result.push(row);
-    }
+  //     const letter = stripMarkdown(row.term).charAt(0).toUpperCase();
+  //     if (letter !== lastLetter) {
+  //       result.push({ divider: letter });
+  //       lastLetter = letter;
+  //     }
+  //     result.push(row);
+  //   }
 
-    return result;
-  }
+  //   return result;
+  // }
 
-  // helper function to get currently selected font size
-  function getCurrentFontSize() {
-    const input = document.getElementById("print_font_size");
-    const val = parseInt(input?.value, 10);
-    return Math.max(1, Math.min(200, isNaN(val) ? 10 : val));
-  }
-
-  // setup event handlers for export buttons
-  document.getElementById("export_csv_button").onclick = () =>
-    exportToCSV(currentRenderedData);
-  document.getElementById("export_excel_button").onclick = () =>
-    exportToExcel(currentRenderedData);
+  // setup event handlers for export/save buttons
+  document.getElementById("save_to_csv_button").onclick = () =>
+    saveToCSV(currentRenderedData, isCollapsed);
 
   // setup event handler for collapse/expand button
   document
@@ -807,16 +1088,16 @@ function runInBrowser() {
     .getElementById("create_index_button")
     .addEventListener("click", () => {
       // setup UI buttons
-      document.getElementById("export_csv_button").style.display =
-        "inline-block";
-      document.getElementById("export_excel_button").style.display =
-        "inline-block";
-      document.getElementById("toggle_collapse_button").style.display =
-        "inline-block";
-      document.getElementById("print_button").style.display = "inline-block";
-      document.getElementById("font_selector").style.display = "inline-block";
-      document.getElementById("insert_dividers_button").style.display =
-        "inline-block";
+      // document.getElementById("save_to_csv_button").style.display =
+      //   "inline-block";
+      // document.getElementById("toggle_collapse_button").style.display =
+      //   "inline-block";
+      // document.getElementById("print_button").style.display = "inline-block";
+      // document.getElementById("font_selector").style.display = "inline-block";
+      // document.getElementById("insert_dividers_button").style.display =
+      //   "inline-block";
+      // showContols now handles these. Single call moved to renderToHTML
+      // TODO: clean up
 
       // set button text back if 'create index' is pressed again
       document.getElementById("insert_dividers_button").textContent =
@@ -828,94 +1109,16 @@ function runInBrowser() {
       const input = document.getElementById("index_input").value;
       const processed = processInputText(input);
 
-      currentRenderedData = processed;
-      isCollapsed = true;
+      // currentRenderedData = processed; TODO: clean up
+
+      // check for previously set enabling of letter divider/rows
+      currentRenderedData = dividerRowsEnabled
+        ? insertLetterDividers(processed)
+        : processed;
+
+      // isCollapsed = true; don't set this as default. Want behaviour to load from file/persist if `create index` clicked again. TODO: cleanup
       renderToHTML(currentRenderedData, isCollapsed);
     });
-}
-
-// called by other export functions (below)
-function getExportData(data, isCollapsed) {
-  // ensure that exported data does not include divider characters
-  const filtered = data.filter((row) => !row.divider);
-  //if (!isCollapsed) return data; // return full data for expanded mode
-
-  const exportData = [];
-  let lastTerm = null;
-  let lastSubTerm = null;
-
-  for (const row of filtered) {
-    const term = row.term === lastTerm ? "" : row.term;
-    const subTerm =
-      row.term === lastTerm && row.subTerm === lastSubTerm ? "" : row.subTerm;
-
-    exportData.push({
-      term,
-      subTerm,
-      notes: row.notes,
-      book: row.book,
-      page: row.page,
-    });
-
-    lastTerm = row.term;
-    lastSubTerm = row.subTerm;
-  }
-
-  return exportData;
-}
-
-// export to csv... not sure how useful this actually is
-function exportToCSV(data) {
-  const exportData = getExportData(data, isCollapsed);
-
-  const rows = [
-    ["Term", "Sub-term", "Notes", "Book", "Page"],
-    ...exportData.map((row) => [
-      stripMarkdown(row.term),
-      stripMarkdown(row.subTerm),
-      stripMarkdown(row.notes),
-      row.book,
-      row.page,
-    ]),
-  ];
-
-  const csvContent = rows
-    .map((r) =>
-      r.map((field) => `"${String(field).replace(/"/g, '""')}"`).join(",")
-    )
-    .join("\n");
-
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "index.csv";
-  a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}
-
-// export to Excel using xlsx library
-function exportToExcel(data) {
-  const exportData = getExportData(data, isCollapsed);
-
-  const rows = [
-    ["Term", "Sub-term", "Notes", "Book", "Page"],
-    ...exportData.map((row) => [
-      stripMarkdown(row.term),
-      stripMarkdown(row.subTerm),
-      stripMarkdown(row.notes),
-      row.book,
-      row.page,
-    ]),
-  ];
-
-  const worksheet = XLSX.utils.aoa_to_sheet(rows);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Index");
-
-  XLSX.writeFile(workbook, "index.xlsx");
 }
 
 // Function to run test cases (defined in files in tests directory),
@@ -1044,6 +1247,7 @@ function parseCSVLine(line) {
 
 // parse CSV string into array of row objects
 // handles headers (or assumes default column order), quoted fields, and ?comment rows
+// handles ?meta row (specifically first row after header)
 function parseCSVTable(csv, hasHeaders = true) {
   // split input into non-empty trimmed lines
   const lines = csv
@@ -1051,14 +1255,14 @@ function parseCSVTable(csv, hasHeaders = true) {
     .split("\n")
     .map((line) => line.trim());
 
-  if (lines.length < 1) return [];
+  if (lines.length < 1) return { rows: [], meta: null };
 
   let headers;
   let dataLines;
+  let meta = null;
 
   if (hasHeaders) {
-    // use the first line as column headers (checking for quoted fields, just in case)
-    headers = parseCSVLine(lines[0]);
+    headers = parseCSVLine(lines[0]).map((h) => h.trim().toLowerCase());
     dataLines = lines.slice(1); // remaining lines are data
   } else {
     // if no headers, assume default column names in fixed order
@@ -1066,17 +1270,30 @@ function parseCSVTable(csv, hasHeaders = true) {
     dataLines = lines;
   }
 
+  // check if first data line is a ?meta row
+  if (dataLines.length > 0) {
+    const firstLine = dataLines[0];
+    const firstCell = parseCSVLine(firstLine)[0];
+    if (firstCell && firstCell.startsWith("?meta:")) {
+      try {
+        const json = firstCell.replace(/^\?meta:\s*/, "");
+        meta = JSON.parse(json);
+      } catch (err) {
+        console.warn("Invalid ?meta line in CSV:", err);
+      }
+      dataLines.shift(); // remove the ?meta row from further processing
+    }
+  }
+
   const rows = dataLines.map((line) => {
-    // parse the current line into cells
     const cells = parseCSVLine(line);
     const row = {};
 
-    // map each cell to corresponding header field
     headers.forEach((header, i) => {
       row[header] = cells[i] || "";
     });
 
-    // handle comment rows: if term starts with "?", mark as ignored
+    // handle other comment rows: if term starts with "?", mark as ignored
     const term = row.term?.trim() || "";
     if (term.startsWith("?")) {
       row._ignore = true;
@@ -1086,7 +1303,7 @@ function parseCSVTable(csv, hasHeaders = true) {
     return row;
   });
 
-  return rows;
+  return { rows, meta };
 }
 
 // processes raw pasted or loaded index input (CSV or Markdown)
@@ -1116,7 +1333,14 @@ function processInputText(text, options = {}) {
   if (format === "markdown") {
     rows = parseMarkdownTable(trimmed, hasHeaders);
   } else if (format === "csv") {
-    rows = parseCSVTable(trimmed, hasHeaders);
+    const parsed = parseCSVTable(trimmed, hasHeaders);
+    rows = parsed.rows;
+    meta = parsed.meta;
+  }
+
+  // save original input data before transforms
+  if (typeof globalThis !== "undefined") {
+    globalThis.originalParsedRows = JSON.parse(JSON.stringify(rows)); // clone
   }
 
   // full transform pipeline:
