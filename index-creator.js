@@ -756,7 +756,8 @@ function escapeCSVField(value) {
 // annoying, but move to global scope
 function populateMetadataForm(meta = {}) {
   document.getElementById("meta_title").value = meta.title || "";
-  document.getElementById("meta_css").value = meta.customCSS || "";
+  // TODO: future feature
+  // document.getElementById("meta_css").value = meta.customCSS || "";
 
   // Set font size input and apply to table
   if (meta.fontSize && !isNaN(meta.fontSize)) {
@@ -927,7 +928,8 @@ function runInBrowser() {
   function getMetadataFromForm() {
     return {
       title: document.getElementById("meta_title")?.value?.trim() || null,
-      customCSS: document.getElementById("meta_css")?.value?.trim() || null,
+      // TODO: future feature
+      // customCSS: document.getElementById("meta_css")?.value?.trim() || null,
       fontSize:
         parseInt(document.getElementById("print_font_size")?.value, 10) || null,
       collapsed: !!isCollapsed,
