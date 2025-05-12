@@ -389,6 +389,11 @@ function processData(rows) {
   return processed;
 }
 
+// push custom CSS to #custom-style style block
+function applyCustomCSS(css) {
+  document.getElementById("custom-style").textContent = css || "";
+}
+
 // Create and render an HTML table from the `processed` dict object
 // If `isCollapsed` is true, duplicate terms/sub-terms are collapsed
 // using `rowspan`. Otherwise, all rows are shown.
@@ -756,8 +761,13 @@ function escapeCSVField(value) {
 // annoying, but move to global scope
 function populateMetadataForm(meta = {}) {
   document.getElementById("meta_title").value = meta.title || "";
-  // TODO: future feature
-  // document.getElementById("meta_css").value = meta.customCSS || "";
+  document.getElementById("meta_css").value = meta.customCSS || "";
+  console.log(meta.customCSS);
+
+  // push custom CSS to #custom-style style block
+  applyCustomCSS(meta.customCSS);
+  // ...and update print styles accordingly
+  updatePrintButton();
 
   // Set font size input and apply to table
   if (meta.fontSize && !isNaN(meta.fontSize)) {
@@ -867,6 +877,23 @@ function getCurrentFontSize() {
   return Math.max(1, Math.min(200, isNaN(val) ? 10 : val));
 }
 
+// previously: manually updated style string passed to printJS button each time font size changed
+// now: function to pull custom css and append to the font size, ensuring printed file/print preview
+// displays all relevant CSS
+function updatePrintButton() {
+  const size = getCurrentFontSize();
+  const customCSS = document.getElementById("meta_css")?.value?.trim() || "";
+  const styleStr = `table {font-size: ${size}px;}\n${customCSS}`;
+
+  const printBtn = document.getElementById("print_button");
+  if (printBtn) {
+    printBtn.setAttribute(
+      "onclick",
+      `printJS({printable: 'output', type: 'html', scanStyles: false, css: 'print.css', style: \`${styleStr}\`})`
+    );
+  }
+}
+
 // actions to perform when `Create Index` pressed:
 function runInBrowser() {
   // Serialises current index data & metadata into downloadable CSV file.
@@ -928,8 +955,7 @@ function runInBrowser() {
   function getMetadataFromForm() {
     return {
       title: document.getElementById("meta_title")?.value?.trim() || null,
-      // TODO: future feature
-      // customCSS: document.getElementById("meta_css")?.value?.trim() || null,
+      customCSS: document.getElementById("meta_css")?.value?.trim() || null,
       fontSize:
         parseInt(document.getElementById("print_font_size")?.value, 10) || null,
       collapsed: !!isCollapsed,
@@ -1025,28 +1051,35 @@ function runInBrowser() {
     });
 
   // setup print size functionality
-
   function setupFontSizeControls() {
     const input = document.getElementById("print_font_size");
     const incBtn = document.getElementById("increase_font");
     const decBtn = document.getElementById("decrease_font");
+
+    // TODO: remove
     const printBtn = document.getElementById("print_button");
 
     function updatePrintButtonFontSize(sizePx) {
       const sanitised = Math.max(1, Math.min(200, parseInt(sizePx, 10) || 10));
       input.value = sanitised;
 
-      const styleStr = `table {font-size: ${sanitised}px;}`;
-      printBtn.setAttribute(
-        "onclick",
-        `printJS({printable: 'output', type: 'html', scanStyles: false, css: 'print.css', style: '${styleStr}'})`
-      );
+      // TODO: remove, superseded by updatePrintButton();
+      // // get the custom CSS and append to the string that is passed when print button clicked
+      // const customCSS =
+      //   document.getElementById("meta_css")?.value?.trim() || "";
+      // const styleStr = `table {font-size: ${sanitised}px;} ${customCSS}`;
+      // printBtn.setAttribute(
+      //   "onclick",
+      //   `printJS({printable: 'output', type: 'html', scanStyles: false, css: 'print.css', style: '${styleStr}'})`
+      // );
 
       // update the rendered table's font size if it exists (live preview of selected font size)
       const table = document.querySelector("#output table");
       if (table) {
         table.style.fontSize = `${sanitised}px`;
       }
+
+      updatePrintButton();
     }
 
     input.addEventListener("input", () =>
@@ -1117,6 +1150,11 @@ function runInBrowser() {
       currentRenderedData = dividerRowsEnabled
         ? insertLetterDividers(processed)
         : processed;
+
+      // push custom CSS to #custom-style style block
+      applyCustomCSS(getMetadataFromForm().customCSS);
+      // ...and update print styles accordingly
+      updatePrintButton();
 
       // isCollapsed = true; don't set this as default. Want behaviour to load from file/persist if `create index` clicked again. TODO: cleanup
       renderToHTML(currentRenderedData, isCollapsed);
