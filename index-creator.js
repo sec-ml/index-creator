@@ -373,13 +373,13 @@ function processData(rows) {
   // Sort the `processed` object before rendering.
   // Alphabetically: first by term, then sub-term, then book number
   processed.sort((a, b) => {
-    const termCmp = cleanStripMarkdown(a.term).localeCompare(
-      cleanStripMarkdown(b.term)
+    const termCmp = stripAllMarkup(a.term).localeCompare(
+      stripAllMarkup(b.term)
     );
     if (termCmp !== 0) return termCmp;
 
-    const subCmp = cleanStripMarkdown(a.subTerm).localeCompare(
-      cleanStripMarkdown(b.subTerm)
+    const subCmp = stripAllMarkup(a.subTerm).localeCompare(
+      stripAllMarkup(b.subTerm)
     );
     if (subCmp !== 0) return subCmp;
 
@@ -599,6 +599,7 @@ function normalisePageOrder(pageString) {
     .join(", ");
 }
 
+// redundant - now handled by stripAllMarkup - below.
 function cleanStripMarkdown(text) {
   if (!text) return "";
 
@@ -608,6 +609,19 @@ function cleanStripMarkdown(text) {
     .replace(/\*\*\*([^\*]+?)\*\*\*/g, "$1")
     .replace(/\*\*([^\*]+?)\*\*/g, "$1")
     .replace(/\*([^\*]+?)\*/g, "$1");
+}
+
+// When adding HTML span elements to abbreviations, these can
+// get caught when ordering terms if abbreviation is at the
+// start of the term.
+function stripAllMarkup(text) {
+  if (!text) return "";
+
+  // strip markdown
+  const noMarkdown = stripMarkdown(text);
+
+  // strip HTML tags (well... anything that looks like one)
+  return noMarkdown.replace(/<[^>]*>/g, "").trim();
 }
 
 function extractPageStart(page) {
