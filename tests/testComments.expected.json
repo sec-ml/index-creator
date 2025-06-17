@@ -1,8 +1,8 @@
 [
   {
-    "term": "contains long expansions",
-    "subTerm": "contains long expansions",
-    "notes": "contains long expansions",
+    "term": "<span class=\"abbr-contains\">contains long expansions</span>",
+    "subTerm": "<span class=\"abbr-contains\">contains long expansions</span>",
+    "notes": "<span class=\"abbr-contains\">contains long expansions</span>",
     "book": 6,
     "page": "5-7"
   },
