@@ -149,9 +149,11 @@ function applyReplacements(rows, replacements) {
       for (const [shorthand, replacement] of Object.entries(replacements)) {
         const regex = new RegExp(`\\b${escapeRegExp(shorthand)}\\b`, "gi");
 
-        text = text.replace(regex, (matched) =>
-          matchCapitalisation(matched, replacement)
-        );
+        text = text.replace(regex, (matched) => {
+          const replaced = matchCapitalisation(matched, replacement);
+          const className = `abbr-${sanitise(shorthand)}`;
+          return `<span class="${className}">${replaced}</span>`;
+        });
       }
 
       // Step 3 - restore escaped terms
@@ -394,6 +396,16 @@ function applyCustomCSS(css) {
   document.getElementById("custom-style").textContent = css || "";
 }
 
+// create a slug that will be used as part of row, cell, other addressable classes
+function sanitise(text) {
+  return (String(text) || "")
+    .toLowerCase()
+    .replace(/[`*\\]/g, "") // strip markdown escape chars
+    .replace(/[^a-z0-9_-]+/g, "-") // replace non-alpha chars with hyphen
+    .replace(/^-+|-+$/g, "") // trim leading/trailing hyphens
+    .replace(/--+/g, "-"); // collapse duplicate hyphens
+}
+
 // Create and render an HTML table from the `processed` dict object
 // If `isCollapsed` is true, duplicate terms/sub-terms are collapsed
 // using `rowspan`. Otherwise, all rows are shown.
@@ -446,8 +458,13 @@ function renderToHTML(data, isCollapsed) {
               )}</td>`
             : `<td>${parseInlineMarkdown(row.subTerm)}</td>`;
 
+        // while building each row, use sanitised terms/data to allow CSS targeting of rows/cells
+        const termSlug = sanitise(row.term);
+        const subTermSlug = sanitise(row.subTerm);
+        const bookSlug = sanitise(row.book);
+
         rows.push(`
-          <tr>
+          <tr class="term-${termSlug} subterm-${subTermSlug} book-${bookSlug}">
             ${termCell}
             ${subTermCell}
             <td>${parseInlineMarkdown(row.notes)}</td>
