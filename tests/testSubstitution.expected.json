@@ -1,55 +1,55 @@
 [
   {
-    "term": "(VMs) virtual machines",
-    "subTerm": "(VMs) Virtual machines",
-    "notes": "(VMs) Virtual Machines",
+    "term": "<span class=\"abbr-vms\">(VMs) virtual machines</span>",
+    "subTerm": "<span class=\"abbr-vms\">(VMs) Virtual machines</span>",
+    "notes": "<span class=\"abbr-vms\">(VMs) Virtual Machines</span>",
     "book": 1,
     "page": "10"
   },
   {
-    "term": "general multi-word casing test",
-    "subTerm": "general multi-word casing test, General multi-word casing test, General Multi-Word Casing Test",
+    "term": "<span class=\"abbr-gen\">general multi-word casing test</span>",
+    "subTerm": "<span class=\"abbr-gen\">general multi-word casing test</span>, <span class=\"abbr-gen\">General multi-word casing test</span>, <span class=\"abbr-gen\">General Multi-Word Casing Test</span>",
     "notes": "",
     "book": 1,
     "page": "10"
   },
   {
-    "term": "tactics, techniques & procedures (TTPs)",
-    "subTerm": "tactics, techniques & procedures (TTPs), Tactics, techniques & procedures (TTPs), Tactics, Techniques & Procedures (TTPs)",
+    "term": "<span class=\"abbr-ttps\">tactics, techniques & procedures (TTPs)</span>",
+    "subTerm": "<span class=\"abbr-ttps\">tactics, techniques & procedures (TTPs)</span>, <span class=\"abbr-ttps\">Tactics, techniques & procedures (TTPs)</span>, <span class=\"abbr-ttps\">Tactics, Techniques & Procedures (TTPs)</span>",
     "notes": "",
     "book": 1,
     "page": "10"
   },
   {
     "term": "test maintaining acronyms as defined",
-    "subTerm": "(VMs) virtual machines",
+    "subTerm": "<span class=\"abbr-vms\">(VMs) virtual machines</span>",
     "notes": "",
     "book": 1,
     "page": "10"
   },
   {
-    "term": "vulnerability",
+    "term": "<span class=\"abbr-vuln\">vulnerability</span>",
     "subTerm": "",
-    "notes": "Vulnerability is bad.",
+    "notes": "<span class=\"abbr-vuln\">Vulnerability</span> is bad.",
     "book": 1,
     "page": "10"
   },
   {
-    "term": "vulnerability",
+    "term": "<span class=\"abbr-vuln\">vulnerability</span>",
     "subTerm": "",
-    "notes": "vulnerability is common.",
+    "notes": "<span class=\"abbr-vuln\">vulnerability</span> is common.",
     "book": 1,
     "page": "10"
   },
   {
-    "term": "we will",
-    "subTerm": "we will we will rock you",
+    "term": "<span class=\"abbr-we-ll\">we will</span>",
+    "subTerm": "<span class=\"abbr-we-ll\">we will</span> <span class=\"abbr-we-ll\">we will</span> rock you",
     "notes": "",
     "book": 1,
     "page": "10"
   },
   {
-    "term": "We Will test capitalising all words",
+    "term": "<span class=\"abbr-we-ll\">We Will</span> test capitalising all words",
     "subTerm": "",
     "notes": "",
     "book": 1,
@@ -70,7 +70,7 @@
     "page": "10"
   },
   {
-    "term": "What about Vulnerability casing?",
+    "term": "What about <span class=\"abbr-vuln\">Vulnerability</span> casing?",
     "subTerm": "this test capitalisation of the first word",
     "notes": "",
     "book": 1,
