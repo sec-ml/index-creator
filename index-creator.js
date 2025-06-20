@@ -890,7 +890,7 @@ function insertLetterDividers(data) {
       continue;
     }
 
-    const letter = stripMarkdown(row.term).charAt(0).toUpperCase();
+    const letter = stripAllMarkup(row.term).charAt(0).toUpperCase();
     if (letter !== lastLetter) {
       result.push({ divider: letter });
       lastLetter = letter;
