@@ -1360,9 +1360,102 @@ function parseCSVTable(csv, hasHeaders = true) {
     const cells = parseCSVLine(line);
     const row = {};
 
+    // headers.forEach((header, i) => {
+    //   row[header] = cells[i] || "";
+    // });
+
+    // headers.forEach((header, i) => {
+    //   let value = cells[i] || "";
+
+    //   const caretIndex = value.indexOf("^");
+    //   if (caretIndex > 0) {
+    //     const [lhs, rhs] = [
+    //       value.slice(0, caretIndex),
+    //       value.slice(caretIndex + 1),
+    //     ];
+
+    //     // If RHS is wrapped in double quotes with Excel-style escaping (""), normalize
+    //     if (/^""[^"]+""$/.test(rhs)) {
+    //       const cleaned = rhs.slice(2, -2).replace(/""/g, '"');
+    //       value = `${lhs}^"${cleaned}"`;
+    //     }
+    //   }
+
+    //   row[header] = value;
+    // });
+
+    // headers.forEach((header, i) => {
+    //   let value = cells[i] || "";
+
+    //   // Heuristic fix for lost double quotes in multi-word caret definitions
+    //   const caretIndex = value.indexOf("^");
+
+    //   if (caretIndex > 0) {
+    //     const lhs = value.slice(0, caretIndex);
+    //     const rhs = value.slice(caretIndex + 1).trim();
+
+    //     // If RHS has multiple words and is not quoted, wrap it in single quotes
+    //     if (
+    //       !/^['"]/.test(rhs) &&
+    //       /\s/.test(rhs) &&
+    //       !rhs.includes("^") &&
+    //       /^[\w\s()\-]+$/.test(rhs) // only letters, spaces, dashes, parens
+    //     ) {
+    //       const safe = rhs.replace(/'/g, "\\'");
+    //       value = `${lhs}^'${safe}'`;
+    //     }
+    //   }
+
+    //   row[header] = value;
+    // });
+
     headers.forEach((header, i) => {
-      row[header] = cells[i] || "";
+      let value = cells[i] || "";
+
+      // Fix for https://github.com/sec-ml/index-creator/issues/18
+      // handles abbreviation definitions in each field (e.g. term^replacement)
+      // CSV escaping strips quotes, e.g. term^"multi word" becomes term^multi word
+      // this causes multi-word replacements to break/partial matches.
+      // this fix:
+      // - finds all abbreviation definitions in the field (not just the first)
+      // - wraps unquoted multi-word replacements in single quotes
+      // - leaves existing quoted definitions untouched (supports both ' and ")
+      // - leaves single-word values as-is
+      //
+      // e.g. "foo^bar bar^multi word"  ->  "foo^bar bar^'multi word'"
+      // FIX: Updated caretFixRegex to support multiple definitions per field,
+      // including unquoted multi-word RHS. Works like Markdown parsing.
+      const caretFixRegex =
+        /(?:"([^"]+)"|'([^']+)'|([\w-]+))\^("([^"]+)"|'([^']+)'|([\w-]+))(?=\s|$)/g;
+
+      value = value.replace(
+        caretFixRegex,
+        (match, d1, s1, u1, dq2, sq2, u2) => {
+          const lhs = d1 || s1 || u1;
+          let rhs = dq2 || sq2 || u2;
+
+          if (!lhs || !rhs) return match;
+
+          const cleanedLHS = lhs.trim();
+          let cleanedRHS = rhs.trim();
+
+          const isQuoted = /^['"]/.test(cleanedRHS);
+          const needsQuoting =
+            !isQuoted &&
+            /\s/.test(cleanedRHS) &&
+            /^[\w\s()\[\]-]+$/.test(cleanedRHS);
+
+          if (needsQuoting) {
+            cleanedRHS = `'${cleanedRHS.replace(/'/g, "\\'")}'`;
+          }
+
+          return `${cleanedLHS}^${cleanedRHS}`;
+        }
+      );
+
+      row[header] = value;
     });
+    // end fix. Leaving marker for ref.
 
     // handle other comment rows: if term starts with "?", mark as ignored
     const term = row.term?.trim() || "";
